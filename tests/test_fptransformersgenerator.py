@@ -3,6 +3,7 @@ import tempfile
 
 import numpy as np
 import pytest
+from rdkit import Chem
 from sklearn import clone
 
 from scikit_mol.fingerprints import (
@@ -195,7 +196,7 @@ def test_topologicaltorsion_set_params(chiral_mols_list):
     new_params = {  #'atomInvariants': 0,
         #'fromAtoms': 0,
         #'ignoreAtoms': 0,
-        #'includeChirality': True, #TODO, figure out why this setting seems to give same FP whether toggled or not
+        "includeChirality": True,
         "fpSize": 1024,
         #'nBitsPerEntry': 3, #Todo: not setable with the generators?
         "targetSize": 5,
@@ -222,3 +223,33 @@ def test_RDKitFPTransformer(chiral_mols_list):
     assert_transformer_set_params(
         RDKitFingerprintTransformer, new_params, chiral_mols_list
     )
+
+
+@pytest.mark.parametrize(
+    "transformer_class, useCounts",
+    [
+        (TopologicalTorsionFingerprintTransformer, False),
+        (TopologicalTorsionFingerprintTransformer, True),
+        # Only the count version: for this pair RDKit's own folded atom-pair bit
+        # vectors are identical even with includeChirality=True
+        (AtomPairFingerprintTransformer, True),
+    ],
+)
+def test_include_chirality_separates_enantiomers(transformer_class, useCounts):
+    """includeChirality is the only thing that tells two enantiomers apart."""
+    enantiomers = [
+        Chem.MolFromSmiles("N[C@@H](C)C(=O)O"),
+        Chem.MolFromSmiles("N[C@H](C)C(=O)O"),
+    ]
+    transformer = transformer_class(useCounts=useCounts)
+    fp_r, fp_s = transformer.transform(enantiomers)
+    assert np.array_equal(fp_r, fp_s)
+
+    transformer.set_params(includeChirality=True)
+    fp_r, fp_s = transformer.transform(enantiomers)
+    assert not np.array_equal(fp_r, fp_s)
+
+    # Switching it off again restores the achiral fingerprint
+    transformer.set_params(includeChirality=False)
+    fp_r, fp_s = transformer.transform(enantiomers)
+    assert np.array_equal(fp_r, fp_s)
