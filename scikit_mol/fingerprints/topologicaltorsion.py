@@ -96,6 +96,7 @@ class TopologicalTorsionFingerprintTransformer(FpsGeneratorTransformer):
                 fromAtoms=self.fromAtoms,
                 ignoreAtoms=self.ignoreAtoms,
                 customAtomInvariants=self.atomInvariants,
+                confId=int(self.confId),
             )
         else:
             return self._fpgen.GetFingerprintAsNumPy(
@@ -103,4 +104,5 @@ class TopologicalTorsionFingerprintTransformer(FpsGeneratorTransformer):
                 fromAtoms=self.fromAtoms,
                 ignoreAtoms=self.ignoreAtoms,
                 customAtomInvariants=self.atomInvariants,
+                confId=int(self.confId),
             )

@@ -3,6 +3,8 @@ import tempfile
 
 import numpy as np
 import pytest
+from rdkit import Chem
+from rdkit.Chem import AllChem, rdFingerprintGenerator
 from sklearn import clone
 
 from scikit_mol.fingerprints import (
@@ -222,3 +224,35 @@ def test_RDKitFPTransformer(chiral_mols_list):
     assert_transformer_set_params(
         RDKitFingerprintTransformer, new_params, chiral_mols_list
     )
+
+
+@pytest.mark.parametrize("useCounts", [False, True])
+def test_atompair_confid_selects_conformer(useCounts):
+    """With use2D=False the distances come from the conformer named by confId."""
+    mol = Chem.AddHs(Chem.MolFromSmiles("CCCCCCCCOC(=O)CCN"))
+    AllChem.EmbedMultipleConfs(mol, 2, randomSeed=7)
+    generator = rdFingerprintGenerator.GetAtomPairGenerator(use2D=False, fpSize=2048)
+    get_fp = (
+        generator.GetCountFingerprintAsNumPy
+        if useCounts
+        else generator.GetFingerprintAsNumPy
+    )
+    expected = [get_fp(mol, confId=conf_id) for conf_id in (0, 1)]
+    assert not np.array_equal(expected[0], expected[1])
+
+    transformer = AtomPairFingerprintTransformer(use2D=False, useCounts=useCounts)
+    for conf_id in (0, 1):
+        transformer.set_params(confId=conf_id)
+        assert np.array_equal(transformer.transform([mol])[0], expected[conf_id])
+    # numpy integers, as hyperparameter search tools pass them, are accepted
+    transformer.set_params(confId=np.int64(1))
+    assert np.array_equal(transformer.transform([mol])[0], expected[1])
+
+
+def test_topologicaltorsion_accepts_confid(chiral_mols_list):
+    """Torsions are topological, so confId is passed on but changes nothing."""
+    default = TopologicalTorsionFingerprintTransformer().transform(chiral_mols_list)
+    with_conf = TopologicalTorsionFingerprintTransformer(confId=0).transform(
+        chiral_mols_list
+    )
+    assert np.array_equal(default, with_conf)
